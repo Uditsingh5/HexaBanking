@@ -1,0 +1,344 @@
+const transactionModel = require("../models/transaction.model")
+const ledgerModel = require("../models/ledger.model")
+const accountModel = require("../models/account.model")
+const emailService = require("../services/email.service")
+const mongoose = require("mongoose")
+
+/**
+ * - Create a new transaction
+ * THE 10-STEP TRANSFER FLOW:
+     * 1. Validate request
+     * 2. Validate idempotency key
+     * 3. Check account status
+     * 4. Derive sender balance from ledger
+     * 5. Create transaction (PENDING)
+     * 6. Create DEBIT ledger entry
+     * 7. Create CREDIT ledger entry
+     * 8. Mark transaction COMPLETED
+     * 9. Commit MongoDB session
+     * 10. Send email notification
+ */
+
+async function createTransaction(req, res) {
+
+    /**
+     * 1. Validate request
+     */
+    const { fromAccount, toAccount, amount, idempotencyKey } = req.body
+
+    if (!fromAccount || !toAccount || !amount || !idempotencyKey) {
+        return res.status(400).json({
+            message: "FromAccount, toAccount, amount and idempotencyKey are required"
+        })
+    }
+
+    const fromUserAccount = await accountModel.findOne({
+        _id: fromAccount,
+    })
+
+    const toUserAccount = await accountModel.findOne({
+        _id: toAccount,
+    })
+
+    if (!fromUserAccount || !toUserAccount) {
+        return res.status(400).json({
+            message: "Invalid fromAccount or toAccount"
+        })
+    }
+
+    /**
+     * 2. Validate idempotency key
+     */
+
+    const isTransactionAlreadyExists = await transactionModel.findOne({
+        idempotencyKey: idempotencyKey
+    })
+
+    if (isTransactionAlreadyExists) {
+        if (isTransactionAlreadyExists.status === "completed") {
+            return res.status(200).json({
+                message: "Transaction already processed",
+                transaction: isTransactionAlreadyExists
+            })
+
+        }
+
+        if (isTransactionAlreadyExists.status === "pending") {
+            return res.status(200).json({
+                message: "Transaction is still processing",
+            })
+        }
+
+        if (isTransactionAlreadyExists.status === "failed") {
+            return res.status(500).json({
+                message: "Transaction processing failed, please retry"
+            })
+        }
+
+        if (isTransactionAlreadyExists.status === "reversed") {
+            return res.status(500).json({
+                message: "Transaction was reversed, please retry"
+            })
+        }
+    }
+
+    /**
+     * 3. Check account status
+     */
+
+    if (fromUserAccount.status !== "active" || toUserAccount.status !== "active") {
+        return res.status(400).json({
+            message: "Both fromAccount and toAccount must be active to process transaction"
+        })
+    }
+
+    /**
+     * 4. Derive sender balance from ledger
+     */
+    const balance = await fromUserAccount.getBalance()
+
+    if (balance < amount) {
+        return res.status(400).json({
+            message: `Insufficient balance. Current balance is ${balance}. Requested amount is ${amount}`
+        })
+    }
+
+    let transaction;
+    let session;
+    try {
+
+
+        /**
+         * 5. Create transaction (PENDING)
+         */
+        session = await mongoose.startSession()
+        session.startTransaction()
+
+        transaction = (await transactionModel.create([ {
+            fromAccount,
+            toAccount,
+            amount,
+            idempotencyKey,
+            status: "pending"
+        } ], { session }))[ 0 ]
+
+        /**
+         * 6. Create DEBIT ledger entry
+         */
+        await ledgerModel.create([ {
+            account: fromAccount,
+            amount: -amount,
+            transaction: transaction._id,
+            type: "debit"
+        } ], { session })
+
+        await (()=>{
+          return new Promise((resolve, reject) => {
+            // Artificial delay to simulate real-world processing time and test idempotency
+            setTimeout(() => {
+              resolve()
+            }, 15*1000)
+            })
+          }
+        )()
+        /**
+         * 7. Create CREDIT ledger entry
+         */
+        await ledgerModel.create([ {
+            account: toAccount,
+            amount: amount,
+            transaction: transaction._id,
+            type: "credit"
+        } ], { session })
+
+        /**
+         * 8. Mark transaction COMPLETED
+         */
+        transaction = await transactionModel.findOneAndUpdate(
+            { _id: transaction._id },
+            { status: "completed" },
+            { session, new: true }
+        )
+
+        /**
+         * 9. Commit MongoDB session
+         */
+        await session.commitTransaction()
+        session.endSession()
+    } catch (error) {
+        if (session) {
+            await session.abortTransaction()
+            session.endSession()
+        }
+
+        console.error("Transaction error:", error)
+
+        return res.status(400).json({
+            message: "Transaction is pending due to an error, please retry after some time. If the issue persists, contact support.",
+            error: error.message
+        })
+
+    }
+    /**
+     * 10. Send email notifications to both sender and receiver
+     */
+    try {
+        // Get receiver's account and user details
+        const receiverAccount = await accountModel.findById(toAccount).populate('user');
+        
+        if (receiverAccount && receiverAccount.user) {
+            // Calculate balances after transaction
+            const senderBalance = await fromUserAccount.getBalance();
+            const receiverBalance = await receiverAccount.getBalance();
+            
+            // Send debit email to sender with recipient name
+            await emailService.sendDebitEmail(
+                req.user.email,
+                req.user.name,
+                amount,
+                transaction._id,
+                receiverAccount.user.name,
+                senderBalance
+            );
+            
+            // Send credit email to receiver with sender name
+            await emailService.sendCreditEmail(
+                receiverAccount.user.email,
+                receiverAccount.user.name,
+                amount,
+                transaction._id,
+                req.user.name,
+                receiverBalance
+            );
+        }
+    } catch (error) {
+        console.error("Email notification failed:", error)
+        // Don't fail the response if email fails - transaction already completed
+    }
+
+    return res.status(201).json({
+        message: "Transaction completed successfully",
+        transactionType: "debit",
+        transactionStatus: "completed",
+        details: {
+            amount: amount,
+            debitedFrom: fromAccount,
+            creditedTo: toAccount,
+            transactionId: transaction._id
+        },
+        transaction: transaction
+    })
+
+}
+
+async function createInitialFundsTransaction(req, res) {
+    const { toAccount, amount, idempotencyKey } = req.body
+
+    if (!toAccount || !amount || !idempotencyKey) {
+        return res.status(400).json({
+            message: "toAccount, amount and idempotencyKey are required"
+        })
+    }
+
+    const toUserAccount = await accountModel.findOne({
+        _id: toAccount,
+    })
+
+    if (!toUserAccount) {
+        return res.status(400).json({
+            message: "Invalid toAccount"
+        })
+    }
+
+    const fromUserAccount = await accountModel.findOne({
+        user: req.user._id
+    })
+
+    if (!fromUserAccount) {
+        return res.status(400).json({
+            message: "System user account not found"
+        })
+    }
+
+    let transaction;
+    let session;
+    try {
+        session = await mongoose.startSession()
+        session.startTransaction()
+
+        transaction = (await transactionModel.create([ {
+            fromAccount: fromUserAccount._id,
+            toAccount,
+            amount,
+            idempotencyKey,
+            status: "pending"
+        } ], { session }))[ 0 ]
+
+        await ledgerModel.create([ {
+            account: fromUserAccount._id,
+            amount: -amount,
+            transaction: transaction._id,
+            type: "debit"
+        } ], { session })
+
+        await ledgerModel.create([ {
+            account: toAccount,
+            amount: amount,
+            transaction: transaction._id,
+            type: "credit"
+        } ], { session })
+
+        transaction = await transactionModel.findOneAndUpdate(
+            { _id: transaction._id },
+            { status: "completed" },
+            { session, new: true }
+        )
+
+        await session.commitTransaction()
+        session.endSession()
+    } catch (error) {
+        if (session) {
+            await session.abortTransaction()
+            session.endSession()
+        }
+
+        console.error("Initial funds transaction error:", error)
+
+        return res.status(400).json({
+            message: "Initial funds transaction failed, please retry",
+            error: error.message
+        })
+    }
+
+    // Send credit email to receiver
+    try {
+        const receiverAccount = await accountModel.findById(toAccount).populate('user');
+        const senderAccount = await accountModel.findById(fromUserAccount._id).populate('user');
+        
+        if (receiverAccount && receiverAccount.user && senderAccount && senderAccount.user) {
+            const receiverBalance = await receiverAccount.getBalance();
+            
+            await emailService.sendCreditEmail(
+                receiverAccount.user.email,
+                receiverAccount.user.name,
+                amount,
+                transaction._id,
+                senderAccount.user.name,
+                receiverBalance
+            );
+        }
+    } catch (error) {
+        console.error("Email notification failed:", error)
+        // Don't fail the response if email fails - transaction already completed
+    }
+
+    return res.status(201).json({
+        message: "Initial funds transaction completed successfully",
+        transaction: transaction
+    })
+}
+
+module.exports = {
+    createTransaction,
+    createInitialFundsTransaction
+}
