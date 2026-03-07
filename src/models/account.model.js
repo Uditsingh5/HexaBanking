@@ -25,6 +25,7 @@ const accountSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
+// Have to learn this concept in depth. the name is aggregation pipeline.
 accountSchema.methods.getBalance = async function () {
   const balance = await ledgerModel.aggregate([
     { $match: { account: this._id } },

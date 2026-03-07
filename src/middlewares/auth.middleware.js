@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 
 const tokenBlacklistModel = require("../models/blacklist.model");
 
+// Middleware to authenticate users
+
 async function authMiddleware(req, res, next) {
   const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -38,6 +40,8 @@ async function authMiddleware(req, res, next) {
     })
   }
 }
+
+// Middleware to authenticate system users (admin).
 
 async function authSystemUserMiddleware(req, res, next) {
   const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
@@ -78,6 +82,7 @@ async function authSystemUserMiddleware(req, res, next) {
     })
   }
 }
+
 module.exports = {
   authMiddleware,
   authSystemUserMiddleware

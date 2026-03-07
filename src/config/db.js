@@ -9,8 +9,8 @@ function connectDB(){
     .catch((error) => {
       console.log('Error connecting to database!');
       console.error(error);
+      // graceful shutdown.
       process.exit(1);
-      // close the server bcz it will consume resources with no services available;
     })
 }
 

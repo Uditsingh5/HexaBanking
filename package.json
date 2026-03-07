@@ -1,8 +1,8 @@
 {
-  "name": "txn_ledger",
+  "name": "hexa_ledger",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A comprehensive financial management application built with Node.js, Express, and MongoDB. It offers features such as user authentication, transaction tracking,account management, and secure data handling. The application is designed get real world exposure of how to build a full-stack finance application.",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
