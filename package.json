@@ -1,27 +1,10 @@
 {
-  "name": "hexa_ledger",
-  "version": "1.0.0",
-  "description": "A comprehensive financial management application built with Node.js, Express, and MongoDB. It offers features such as user authentication, transaction tracking,account management, and secure data handling. The application is designed get real world exposure of how to build a full-stack finance application.",
-  "main": "server.js",
+  "name": "hexa-secure-banking",
+  "private": true,
+  "description": "Hexa Secure Banking — API in /server, frontend in /frontend",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon server.js",
-    "start": "node server.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "cookie-parser": "^1.4.7",
-    "dotenv": "^17.2.4",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.2.0",
-    "nodemailer": "^8.0.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.11"
+    "dev": "npm run dev --prefix server",
+    "start": "npm start --prefix server",
+    "dev:frontend": "npm run dev --prefix frontend"
   }
 }

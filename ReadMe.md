@@ -47,17 +47,20 @@ The interesting part was implementing the ledger - instead of just updating a ba
 ## Structure
 
 ```
-server.js                    # Entry point
-src/
-  app.js                     # Express setup
-  config/db.js               # MongoDB connection
-  controllers/               # Business logic
-  models/                    # Mongoose schemas
-    account.model.js         # Has custom getBalance() method
-    ledger.model.js          # Double-entry magic
-  middlewares/auth.middleware.js
-  routes/
-  services/email.service.js
+server/
+  server.js                  # API entry point
+  src/
+    app.js                   # Express setup
+    config/db.js             # MongoDB connection
+    controllers/             # Business logic
+    models/                  # Mongoose schemas
+      account.model.js       # Has custom getBalance() method
+      ledger.model.js        # Double-entry magic
+    middlewares/auth.middleware.js
+    routes/
+    services/email.service.js
+  .env.example               # Copy to server/.env
+frontend/                    # React app
 ```
 
 ## Setup
@@ -65,14 +68,17 @@ src/
 Need Node.js and MongoDB. SMTP is optional for emails.
 
 ```bash
+cd server
 npm install
+copy .env.example .env
 ```
 
-Create `.env` file:
+Edit `server/.env` (this is the only env file the API loads):
 ```env
 PORT=3000
 MONGO_URI=mongodb://localhost:27017/hexa_ledger
 JWT_SECRET=any_random_string
+CLIENT_ORIGIN=http://localhost:5173
 
 # Optional email config
 CLIENT_ID=your_smtp_client_id
@@ -80,13 +86,29 @@ CLIENT_SECRET=your_smtp_client_secret
 EMAIL_USER=youremail@gmail.com
 ```
 
-Run:
+Run the API from `server/` or from the repo root:
+
 ```bash
+cd server
 npm run dev    # development with nodemon
 npm start      # production
 ```
 
+```bash
+npm run dev    # from repo root — starts the API in /server
+```
+
 Check `http://localhost:3000` - should see welcome message.
+
+## Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite app runs at `http://localhost:5173` and proxies `/api` to this server so JWT cookies stay same-origin.
 
 ## API
 
