@@ -3,6 +3,7 @@
   "private": true,
   "description": "Hexa Secure Banking — API in /server, frontend in /frontend",
   "scripts": {
+    "build": "cd frontend && npm install && npm run build",
     "dev": "npm run dev --prefix server",
     "start": "npm start --prefix server",
     "dev:frontend": "npm run dev --prefix frontend"

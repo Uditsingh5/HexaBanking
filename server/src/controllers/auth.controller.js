@@ -12,11 +12,12 @@ const tokenBlacklistModel = require("../models/blacklist.model");
  * - secure: only send over HTTPS in production
  * - maxAge: 3 days in ms, matches the JWT expiry
  */
+const isProduction = process.env.NODE_ENV === "production";
 const COOKIE_OPTIONS = {
   path: "/",
   httpOnly: true,
-  sameSite: "lax",
-  secure: process.env.NODE_ENV === "production",
+  sameSite: isProduction ? "none" : "lax",
+  secure: isProduction,
   maxAge: 3 * 24 * 60 * 60 * 1000, // 3 days
 };
 
@@ -50,6 +51,7 @@ const userRegisterController = async (req, res) => {
         email: user.email,
         role: user.role,
       },
+      token,
     });
   } catch (err) {
     console.error("Register error:", err);
@@ -93,6 +95,7 @@ const userLoginController = async (req, res) => {
         email: user.email,
         role: user.role,
       },
+      token,
     });
   } catch (err) {
     console.error("Login error:", err);

@@ -12,7 +12,16 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173")
 app.use(cors({
   origin(origin, callback) {
     // Allow requests with no origin (e.g. server-to-server, curl, mobile apps)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) {
+      return callback(null, true);
+    }
+    const isAllowed =
+      allowedOrigins.includes(origin) ||
+      /\.vercel\.app$/.test(new URL(origin).hostname) ||
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1");
+
+    if (isAllowed) {
       return callback(null, true);
     }
     return callback(

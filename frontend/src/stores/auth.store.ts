@@ -85,6 +85,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { data } = await authApi.login({ email, password });
+      if (data.token) {
+        try {
+          localStorage.setItem("hexa_auth_token", data.token);
+        } catch {}
+      }
       writeSessionUser(data.user);
       set({
         user: data.user,
@@ -105,6 +110,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { data } = await authApi.register({ name, email, password });
+      if (data.token) {
+        try {
+          localStorage.setItem("hexa_auth_token", data.token);
+        } catch {}
+      }
       writeSessionUser(data.user);
       set({
         user: data.user,
@@ -128,6 +138,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Session is cleared locally even if the server call fails.
     } finally {
+      try {
+        localStorage.removeItem("hexa_auth_token");
+        sessionStorage.removeItem("hexa_auth_token");
+      } catch {}
       clearSessionUser();
       set({
         user: null,
@@ -139,6 +153,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   clearAuth() {
+    try {
+      localStorage.removeItem("hexa_auth_token");
+      sessionStorage.removeItem("hexa_auth_token");
+    } catch {}
     clearSessionUser();
     set({
       user: null,

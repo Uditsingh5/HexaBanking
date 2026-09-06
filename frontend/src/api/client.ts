@@ -18,6 +18,20 @@ function createClient(timeout: number): AxiosInstance {
     },
   });
 
+  instance.interceptors.request.use((config) => {
+    try {
+      const token =
+        localStorage.getItem("hexa_auth_token") ||
+        sessionStorage.getItem("hexa_auth_token");
+      if (token && !config.headers.Authorization) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // Storage access disabled / private mode
+    }
+    return config;
+  });
+
   instance.interceptors.response.use(
     (response) => response,
     (error: AxiosError<ApiErrorBody>) => {

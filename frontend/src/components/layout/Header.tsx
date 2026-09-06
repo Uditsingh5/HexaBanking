@@ -1,7 +1,7 @@
 import { Bell } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 
-export function Header({ onMenu }: { onMenu?: () => void }) {
+export function Header() {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === "admin";
 
