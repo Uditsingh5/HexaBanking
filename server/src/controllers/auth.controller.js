@@ -36,6 +36,12 @@ const userRegisterController = async (req, res) => {
       });
     }
     const user = await userModel.create({ email, password, name });
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({
+        message: "Server configuration error: JWT_SECRET environment variable is missing on the server.",
+        status: "failed",
+      });
+    }
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET,
@@ -80,6 +86,12 @@ const userLoginController = async (req, res) => {
     if (!isValid) {
       return res.status(401).json({
         message: "Email or Password is Invalid!"
+      });
+    }
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({
+        message: "Server configuration error: JWT_SECRET environment variable is missing on the server.",
+        status: "failed",
       });
     }
     const token = jwt.sign(
